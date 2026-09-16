@@ -429,7 +429,10 @@ main {
 }
 
 /* Morado — Repetir */
-.piezaRepetir,
+/* Solo las 3 barras de la C llevan color; .piezaRepetir queda transparente */
+.repetir-Bsup,
+.repetir-Bmuro,
+.repetir-Binf,
 .cuadritoRepetir {
     background-color: #9C27B0;
 }
@@ -451,6 +454,108 @@ main {
 .piezaLarga {
     width: 240px;
     /* Largo de cada bloque tipo "largo" */
+}
+
+/* ===== PIEZA REPETIR: forma de "C" ===== */
+/* La C se arma con 3 divs (Bsup, Bmuro, Binf); repetir-Cont solo guarda las piezas anidadas */
+
+/* Contenedor de la pieza: cuadrícula de 2 columnas (muro | piezas) y 3 filas (Bsup | piezas | Binf) */
+.piezaRepetir {
+    display: grid;
+    /* Cuadrícula en vez del flex de .pieza */
+    grid-template-columns: 40px minmax(0, 1fr);
+    /* Columna 1 = muro (40px); columna 2 = contenedor de piezas */
+    grid-template-rows: auto auto 40px;
+    /* Fila 1 = Bsup; fila 2 = piezas (crece sola); fila 3 = Binf (40px) */
+    align-items: stretch;
+    /* .pieza trae "center": sin esto el muro vacío mediría 0 de alto */
+    justify-content: stretch;
+    /* Las columnas llenan todo el ancho */
+    width: 240px;
+    /* Ancho vacío; Interacciones.js lo agranda cuando hay piezas adentro */
+    height: auto;
+    /* .pieza trae 70px fijos; aquí el alto crece con las piezas anidadas */
+    box-shadow: none;
+    /* La sombra de .pieza dibujaría un rectángulo detrás de la C */
+    transition: transform 0.1s, filter 0.15s;
+    /* .pieza ya anima transform (efecto del bote); se agrega filter para que el brillo aparezca suave */
+}
+
+/* Barra superior: texto, emoji e input */
+.repetir-Bsup {
+    grid-column: 1 / 3;
+    /* Ocupa las 2 columnas */
+    grid-row: 1;
+    position: relative;
+    /* Ancla de los cuadritos; además se pinta encima del muro */
+    box-sizing: border-box;
+    height: 70px;
+    /* Mismo alto que la pieza Inicio: deja sitio a los cuadritos de la pieza anidada */
+    display: flex;
+    align-items: center;
+    /* Centra texto e input verticalmente */
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px 8px 8px 0;
+    /* Abajo-izquierda recta: ahí se une con el muro */
+}
+
+/* Empuja el input al extremo derecho (solo en Repetir, no afecta a Tiempo/Antorcha) */
+.repetir-Bsup .inputEstilos {
+    margin-left: auto;
+}
+
+/* Muro izquierdo: va de la fila 1 a la 3 para que la C no tenga uniones en el borde izquierdo */
+.repetir-Bmuro {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    /* Todo el alto: pasa por detrás de Bsup y Binf */
+    border-radius: 8px 0 0 8px;
+}
+
+/* Contenedor de piezas anidadas (no forma parte de la C: sin color ni bordes) */
+.repetir-Cont {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 70px;
+    /* El hueco se ve aunque esté vacío */
+    display: flex;
+    flex-direction: column;
+    /* Piezas una debajo de otra, pegadas (sin gap) */
+    align-items: flex-start;
+    /* Alineadas a la izquierda */
+}
+
+/* Pieza metida dentro del contenedor */
+.repetir-Cont > .pieza {
+    position: relative !important;
+    /* La pieza trae position/left/top en su style de cuando estaba suelta; */
+    left: auto !important;
+    /* sin !important esos estilos ganarían y la pieza no se apilaría */
+    top: auto !important;
+    flex-shrink: 0;
+    /* Evita que la pieza se aplaste */
+}
+
+/* Barra inferior */
+.repetir-Binf {
+    grid-column: 1 / 3;
+    /* Ocupa las 2 columnas */
+    grid-row: 3;
+    border-radius: 0 8px 8px 8px;
+    /* Arriba-izquierda recta: ahí se une con el muro */
+    box-shadow:
+        /* Relieve interno inferior, igual que .pieza */
+        inset 0 -4px rgba(0, 0, 0, 0.2),
+        /* Sombra externa solo hacia abajo */
+        0 5px 6px -3px rgba(0, 0, 0, 0.3);
+}
+
+/* Brillo: se enciende cuando una pieza está en la zona donde entraría al soltarla */
+.piezaRepetir.repetir-Brillo {
+    filter: drop-shadow(0 0 6px #29B6F6) drop-shadow(0 0 2px #29B6F6);
+    /* drop-shadow sigue el contorno de la C (box-shadow dibujaría un rectángulo por cada barra) */
+    /* 6px = resplandor difuso; 2px = línea fina que marca el borde */
 }
 
 /* Contenedor de cuadritos superiores */

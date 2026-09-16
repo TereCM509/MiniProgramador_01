@@ -17,6 +17,10 @@ let offsetY = 0;        // Distancia entre el cursor y el borde superior de la p
 const UMBRAL = 45;      // Distancia máxima (px) para que las piezas se "imanten" y acoplen
 let contadorClones = 0; // Contador para generar IDs únicos para los clones
 
+// Medidas de la pieza Repetir (deben coincidir con .piezaRepetir y .repetir-Bmuro en Estilos.css)
+const ANCHO_VACIO_REPETIR = 240; // Ancho del Repetir sin piezas adentro
+const ANCHO_BMURO = 40;          // Grueso del muro izquierdo de la C
+
 // Función que se activa al presionar el mouse sobre una pieza
 function iniciarArrastre(eDownCursor) {
 
@@ -24,6 +28,10 @@ function iniciarArrastre(eDownCursor) {
     // para que el usuario pueda interactuar con ellos normalmente
     const tagClic = eDownCursor.target.tagName;
     if (tagClic === "INPUT" || tagClic === "SELECT" || tagClic === "OPTION") return;
+
+    // Si el clic fue sobre una pieza anidada, el evento "sube" también al Repetir que la contiene.
+    // Solo lo atiende la pieza más cercana al clic; el Repetir lo ignora para no robarse el arrastre
+    if (eDownCursor.target.closest(".pieza") !== eDownCursor.currentTarget) return;
 
     // currentTarget: siempre es la pieza (.pieza) aunque el clic haya sido en un hijo (ej. cuadrito)
     piezaActual = eDownCursor.currentTarget;
@@ -59,6 +67,23 @@ function iniciarArrastre(eDownCursor) {
         piezaActual = clon;
     }
 
+    // Si la pieza estaba anidada dentro de un Repetir, la sacamos al workspace sin que "brinque"
+    // (debe ir ANTES de calcular offsetX/offsetY, que usan la posición dentro del workspace)
+    if (piezaActual.parentElement.classList.contains("repetir-Cont")) {
+        const repetirOrigen = piezaActual.closest(".piezaRepetir"); // Repetir del que sale la pieza
+        const alturaAntes = repetirOrigen.offsetHeight;              // Alto del Repetir ANTES de sacarla
+        const rectPieza = piezaActual.getBoundingClientRect();       // Dónde se ve la pieza en pantalla
+
+        workspace.appendChild(piezaActual);       // Vuelve a ser hija directa del workspace
+        piezaActual.style.position = "absolute";  // Vuelve a flotar libremente
+
+        // Misma posición visual: pantalla → workspace (clientLeft/clientTop = grosor del borde del workspace)
+        piezaActual.style.left = (rectPieza.left - rectWorkspace.left - workspace.clientLeft) + "px";
+        piezaActual.style.top = (rectPieza.top - rectWorkspace.top - workspace.clientTop) + "px";
+
+        actualizarContenedorRepetir(repetirOrigen, alturaAntes); // El Repetir encoge y lo de abajo sube
+    }
+
     /*
         CORRECCIÓN DE COORDENADAS:
         clientX/clientY → coordenadas del cursor respecto al BORDE DE LA PANTALLA (viewport)
@@ -72,6 +97,9 @@ function iniciarArrastre(eDownCursor) {
     */
     offsetX = eDownCursor.clientX - rectWorkspace.left - piezaActual.offsetLeft;
     offsetY = eDownCursor.clientY - rectWorkspace.top - piezaActual.offsetTop;
+
+    // Mientras se arrastra, la pieza flota por encima de los cuadritos de las demás (cuadritos = z-index 1)
+    piezaActual.style.zIndex = "2";
 }
 
 // Función que mueve la pieza siguiendo al cursor
@@ -112,19 +140,31 @@ function moverPieza(eMoveCursor) {
 
     verificarBoteBasura(eMoveCursor, false); // Efecto visual si se acerca al bote
     verificarTodosLosAcoples(); // Revisa si la pieza está cerca de otra para pegarse
+    actualizarBrilloRepetir(); // Brilla el Repetir donde entraría la pieza
 }
 
 // Suelta la pieza: ya no hay pieza activa
 function terminarArrastre(eUpCursor) {
     if (!piezaActual) return; // Si no hay pieza seleccionada, no hace nada
 
+    // Apagamos el brillo de cualquier Repetir (también si la pieza va al bote)
+    workspace.querySelectorAll(".repetir-Brillo").forEach(r => r.classList.remove("repetir-Brillo"));
+
     // Validar si soltamos la pieza cerca del bote de basura para eliminarla
     const fueEliminada = verificarBoteBasura(eUpCursor, true);
 
     if (!fueEliminada && piezaActual) {
         // Restauramos el tamaño y opacidad por si se quedó "casi" en la basura
-        piezaActual.style.transform = "scale(1)";
+        // "" y no "scale(1)": cualquier transform encierra los cuadritos dentro de su pieza y la vecina los tapa
+        piezaActual.style.transform = "";
         piezaActual.style.opacity = "1";
+        piezaActual.style.zIndex = ""; // Ya soltada, vuelve al nivel normal
+
+        // Si se soltó dentro de un Repetir, se anida (un Repetir nunca se mete dentro de otro Repetir)
+        if (!piezaActual.classList.contains("piezaRepetir")) {
+            const repetirDestino = encontrarRepetirDestino(piezaActual);
+            if (repetirDestino) anidarEnRepetir(piezaActual, repetirDestino);
+        }
     }
 
     piezaActual = null; // null indica que ya no se está moviendo ninguna pieza
@@ -165,8 +205,8 @@ function verificarBoteBasura(eCursor, eliminar) {
             piezaActual.style.transform = `scale(${escala})`;
             piezaActual.style.opacity = escala + 0.1;
         } else {
-            // Fuera de rango: regresar a la normalidad
-            piezaActual.style.transform = "scale(1)";
+            // Fuera de rango: regresar a la normalidad ("" en vez de "scale(1)", ver terminarArrastre)
+            piezaActual.style.transform = "";
             piezaActual.style.opacity = "1";
         }
         return false;
@@ -175,8 +215,12 @@ function verificarBoteBasura(eCursor, eliminar) {
 
 // Revisa la cercanía entre la pieza que se mueve y todas las demás en el workspace
 function verificarTodosLosAcoples() {
-    // Solo comparamos piezas que ya están en el workspace (no las de la bandeja)
-    const piezasEnWorkspace = workspace.querySelectorAll(".pieza");
+    // Solo comparamos piezas sueltas en el workspace (no las de la bandeja ni las anidadas en un Repetir)
+    const piezasEnWorkspace = workspace.querySelectorAll(":scope > .pieza");
+
+    // Si la pieza va entrando a un Repetir, no la imantamos a NADA: ni al Repetir
+    // ni a las piezas acopladas debajo de él (esas "brincarían" hacia la pieza que entra)
+    if (!piezaActual.classList.contains("piezaRepetir") && encontrarRepetirDestino(piezaActual)) return;
 
     piezasEnWorkspace.forEach(pieza => {
         if (pieza === piezaActual) return; // No se compara consigo misma
@@ -235,6 +279,130 @@ function tienePiezaAbajo(piezaArriba, piezasEnWorkspace) {
         }
     }
     return false;
+}
+
+// ===== PIEZA REPETIR: meter, sacar y reacomodar piezas =====
+
+// ¿El centro de la pieza cae en la zona para soltar de este Repetir?
+// Zona = hueco + muro + barra inferior: desde arriba de repetir-Cont hasta el fondo del Repetir, a todo lo ancho
+function centroDentroDeCavidad(pieza, repetirEl) {
+    const rectPieza = pieza.getBoundingClientRect();
+    const centroX = rectPieza.left + rectPieza.width / 2;  // El centro no cambia aunque la pieza esté encogida por el bote
+    const centroY = rectPieza.top + rectPieza.height / 2;
+
+    const rectRepetir = repetirEl.getBoundingClientRect();                                      // Toda la C
+    const rectCont = repetirEl.querySelector(":scope > .repetir-Cont").getBoundingClientRect(); // Solo el hueco
+
+    return centroX >= rectRepetir.left && centroX <= rectRepetir.right && // Muro + hueco, a lo ancho
+           centroY >= rectCont.top && centroY <= rectRepetir.bottom;      // Del hueco hasta el fondo de Binf
+}
+
+// Busca en qué Repetir del workspace se soltó la pieza; devuelve null si en ninguno
+function encontrarRepetirDestino(pieza) {
+    const repetires = workspace.querySelectorAll(":scope > .piezaRepetir"); // Solo Repetir sueltos en el workspace
+
+    for (const repetirEl of repetires) {
+        if (repetirEl !== pieza && centroDentroDeCavidad(pieza, repetirEl)) return repetirEl;
+    }
+    return null;
+}
+
+// Enciende el brillo solo en el Repetir donde entraría la pieza si se soltara ahora
+function actualizarBrilloRepetir() {
+    // Un Repetir nunca entra en otro Repetir: si se arrastra un Repetir, ninguno brilla
+    const repetirDestino = piezaActual.classList.contains("piezaRepetir")
+        ? null
+        : encontrarRepetirDestino(piezaActual);
+
+    workspace.querySelectorAll(":scope > .piezaRepetir").forEach(repetirEl => {
+        // toggle(clase, condición): pone la clase si la condición es true y la quita si es false
+        repetirEl.classList.toggle("repetir-Brillo", repetirEl === repetirDestino);
+    });
+}
+
+// Mete la pieza en repetir-Cont, en el lugar según la altura a la que se soltó
+function anidarEnRepetir(pieza, repetirDestino) {
+    const alturaAntes = repetirDestino.offsetHeight; // Alto del Repetir ANTES de meter la pieza
+    const contenedor = repetirDestino.querySelector(":scope > .repetir-Cont");
+
+    // Centro vertical de la pieza soltada (no cambia aunque la pieza esté encogida por el bote)
+    const rectPieza = pieza.getBoundingClientRect();
+    const centroY = rectPieza.top + rectPieza.height / 2;
+
+    /*
+        Va antes de la primera pieza anidada cuyos 3/4 de altura queden por debajo de ese centro.
+        Se usa 3/4 (y no la mitad) porque al hacer clic sin mover, la pieza de abajo sube a ocupar
+        el hueco y su centro queda EXACTAMENTE a la misma altura que el de la pieza clickeada:
+        con 3/4 hay margen y la pieza regresa a su mismo lugar. Soltarla más arriba o abajo reordena.
+    */
+    let piezaSiguiente = null; // null = va al final
+    for (const hija of contenedor.querySelectorAll(":scope > .pieza")) {
+        const rectHija = hija.getBoundingClientRect();
+        if (centroY < rectHija.top + rectHija.height * 3 / 4) {
+            piezaSiguiente = hija;
+            break;
+        }
+    }
+
+    // Los left/top/position que trae la pieza en su style los anula ".repetir-Cont > .pieza" en Estilos.css
+    contenedor.insertBefore(pieza, piezaSiguiente);
+
+    actualizarContenedorRepetir(repetirDestino, alturaAntes); // El Repetir crece y lo de abajo baja
+}
+
+// Recalcula el ancho del Repetir y, si cambió su alto, reacomoda las piezas acopladas debajo
+function actualizarContenedorRepetir(repetirEl, alturaAntes) {
+    // Ancho: vacío = ANCHO_VACIO_REPETIR; con piezas = la pieza anidada más ancha + el muro
+    let anchoNuevo = ANCHO_VACIO_REPETIR;
+    repetirEl.querySelectorAll(":scope > .repetir-Cont > .pieza").forEach(hija => {
+        anchoNuevo = Math.max(anchoNuevo, hija.offsetWidth + ANCHO_BMURO);
+    });
+    repetirEl.style.width = anchoNuevo + "px";
+
+    // El alto lo calcula solo el navegador (CSS grid); aquí solo medimos cuánto cambió
+    const deltaY = repetirEl.offsetHeight - alturaAntes;
+    if (deltaY !== 0) reacomodarPiezasDebajo(repetirEl, alturaAntes, deltaY);
+}
+
+// Sube (deltaY negativo) o baja (deltaY positivo) la cadena de piezas acopladas debajo del Repetir
+function reacomodarPiezasDebajo(repetirEl, alturaAntes, deltaY) {
+    const piezasSueltas = workspace.querySelectorAll(":scope > .pieza");
+    const cadena = []; // Piezas acopladas debajo del Repetir, en orden
+
+    /*
+        1) SOLO LECTURA: buscamos la cadena con las posiciones de ANTES del cambio.
+           La primera pieza estaba en (top del Repetir + alturaAntes); si usáramos el alto nuevo,
+           buscaríamos donde todavía no hay nada y no se movería ninguna pieza.
+    */
+    let piezaArriba = repetirEl;
+    let altoArriba = alturaAntes;
+
+    while (piezaArriba) {
+        const topEsperado = piezaArriba.offsetTop + altoArriba;
+        const leftEsperado = piezaArriba.offsetLeft;
+        let siguiente = null;
+
+        for (const p of piezasSueltas) {
+            if (p === repetirEl || p === piezaActual || cadena.includes(p)) continue;
+
+            // Mismo margen de 2px que tienePiezaAbajo() por redondeo del navegador
+            if (Math.abs(p.offsetTop - topEsperado) <= 2 && Math.abs(p.offsetLeft - leftEsperado) <= 2) {
+                siguiente = p;
+                break;
+            }
+        }
+
+        if (siguiente) {
+            cadena.push(siguiente);
+            altoArriba = siguiente.offsetHeight;
+        }
+        piezaArriba = siguiente; // null = ya no hay más piezas abajo; termina el ciclo
+    }
+
+    // 2) Con toda la cadena identificada, movemos todas las piezas la misma distancia
+    cadena.forEach(p => {
+        p.style.top = (p.offsetTop + deltaY) + "px";
+    });
 }
 
 function verificarEstado() {
