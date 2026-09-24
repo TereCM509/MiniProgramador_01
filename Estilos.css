@@ -498,6 +498,9 @@ main {
     padding: 10px 12px;
     border-radius: 8px 8px 8px 0;
     /* Abajo-izquierda recta: ahí se une con el muro */
+
+    box-shadow: 
+    inset 0 2px rgba(255, 255, 255, 0.3);
 }
 
 /* Empuja el input al extremo derecho (solo en Repetir, no afecta a Tiempo/Antorcha) */
