@@ -33,6 +33,9 @@ function iniciarArrastre(eDownCursor) {
     // Solo lo atiende la pieza más cercana al clic; el Repetir lo ignora para no robarse el arrastre
     if (eDownCursor.target.closest(".pieza") !== eDownCursor.currentTarget) return;
 
+    // Si la pieza de la bandeja está agotada (ya hay un Inicio o Fin en el workspace), no se clona
+    if (eDownCursor.currentTarget.classList.contains("piezaAgotada")) return;
+
     // currentTarget: siempre es la pieza (.pieza) aunque el clic haya sido en un hijo (ej. cuadrito)
     piezaActual = eDownCursor.currentTarget;
 
@@ -57,6 +60,7 @@ function iniciarArrastre(eDownCursor) {
         clon.addEventListener("mousedown", iniciarArrastre);
 
         workspace.appendChild(clon);       // Metemos el CLON al workspace en el DOM
+        actualizarPiezasUnicas();          // Si el clon es Inicio o Fin, la pieza de la bandeja queda agotada
         clon.style.position = "absolute";  // Lo sacamos del flujo normal para posicionarlo libremente
 
         // Lo colocamos centrado en el cursor (dentro del workspace)
@@ -167,7 +171,25 @@ function terminarArrastre(eUpCursor) {
         }
     }
 
+    actualizarPiezasUnicas(); // Por si la pieza se tiró al bote: libera Inicio/Fin en la bandeja
+
     piezaActual = null; // null indica que ya no se está moviendo ninguna pieza
+}
+
+/*
+    actualizarPiezasUnicas()
+    Propósito: bloquear o liberar en la bandeja las piezas que solo pueden usarse una vez (Inicio y Fin).
+    Recibe: nada (usa piezaInicio y piezaFin declaradas arriba y revisa el workspace).
+    Devuelve: nada; solo pone o quita la clase "piezaAgotada".
+*/
+function actualizarPiezasUnicas() {
+    [piezaInicio, piezaFin].forEach(original => {        // Recorre las piezas únicas de la bandeja
+        if (!original) return;                          // Si la misión no tiene esa pieza, se salta
+        const selector = `[id^="${original.id}_clon"]`; // Busca clones: ids que empiezan con "piezaInicio_clon"...
+        const enUso = workspace.querySelector(selector) !== null; // ¿Hay al menos un clon en el workspace?
+        original.classList.toggle("piezaAgotada", enUso);         // Pone la clase si está en uso, la quita si no
+        original.title = enUso ? `Ya hay un ${original.textContent.trim()} en tu algoritmo` : ""; // Aviso al pasar el mouse
+    });
 }
 
 // Revisa la distancia entre el cursor y el bote de basura

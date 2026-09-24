@@ -836,3 +836,27 @@ button {
 #boteBasura:hover {
     transform: scale(1.1);
 }
+
+/*==============================================
+        PIEZAS ÚNICAS (INICIO Y FIN): AGOTADAS
+===============================================*/
+
+.piezaAgotada {
+    background-color: #8FB98F;
+    /* Verde opaco claro: indica que ya se usó (opción A del mockup) */
+    color: #E8F2E8;
+    /* Texto verde muy claro para que se vea apagado pero legible */
+    cursor: not-allowed;
+    /* Cursor de prohibido: no se puede arrastrar */
+}
+
+.piezaAgotada .cuadritoInicioFin {
+    background-color: #8FB98F;
+    /* Los cuadritos también se apagan, si no se verían verdes brillantes */
+}
+
+.piezaAgotada:active {
+    cursor: not-allowed;
+    /*Al poner el mouse encima pone el cursor en not-allowed*/
+    /* Anula el "puño cerrado" de .pieza:active al hacer clic */
+}
