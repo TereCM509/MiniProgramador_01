@@ -80,6 +80,7 @@
     </div>
 
     <script src="Interacciones.js"></script>
+    <script src="Compilador.js"></script> <!-- Etapas del compilador; usa la variable workspace de Interacciones.js, por eso va después -->
 </body>
 
 </html>

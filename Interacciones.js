@@ -16,6 +16,7 @@ let offsetX = 0;        // Distancia entre el cursor y el borde izquierdo de la 
 let offsetY = 0;        // Distancia entre el cursor y el borde superior de la pieza (en coords del workspace)
 const UMBRAL = 45;      // Distancia máxima (px) para que las piezas se "imanten" y acoplen
 let contadorClones = 0; // Contador para generar IDs únicos para los clones
+let temporizadorGlobito = null; // Reloj del globito de aviso; se guarda para poder cancelarlo
 
 // Medidas de la pieza Repetir (deben coincidir con .piezaRepetir y .repetir-Bmuro en Estilos.css)
 const ANCHO_VACIO_REPETIR = 240; // Ancho del Repetir sin piezas adentro
@@ -167,7 +168,15 @@ function terminarArrastre(eUpCursor) {
         // Si se soltó dentro de un Repetir, se anida (un Repetir nunca se mete dentro de otro Repetir)
         if (!piezaActual.classList.contains("piezaRepetir")) {
             const repetirDestino = encontrarRepetirDestino(piezaActual);
-            if (repetirDestino) anidarEnRepetir(piezaActual, repetirDestino);
+            if (repetirDestino) {
+                anidarEnRepetir(piezaActual, repetirDestino);            // Pieza normal: entra
+            } else if (esPiezaUnica(piezaActual)) {
+                const repetirRechazo = repetirBajoPieza(piezaActual);   // ¿Intentó meter Inicio/Fin en un hueco?
+                if (repetirRechazo) {
+                    const nombre = piezaActual.id.startsWith("piezaInicio") ? "Inicio" : "Fin"; // Para el texto del aviso
+                    mostrarGlobito(repetirRechazo, `El ${nombre} no puede ir dentro de Repetir`); // Se queda donde cayó, con aviso
+                }
+            }
         }
     }
 
@@ -319,14 +328,36 @@ function centroDentroDeCavidad(pieza, repetirEl) {
            centroY >= rectCont.top && centroY <= rectRepetir.bottom;      // Del hueco hasta el fondo de Binf
 }
 
-// Busca en qué Repetir del workspace se soltó la pieza; devuelve null si en ninguno
-function encontrarRepetirDestino(pieza) {
-    const repetires = workspace.querySelectorAll(":scope > .piezaRepetir"); // Solo Repetir sueltos en el workspace
+/*
+    esPiezaUnica(pieza)
+    Propósito: saber si la pieza es Inicio o Fin (las que no pueden ir dentro de un Repetir).
+    Devuelve: true o false.
+*/
+function esPiezaUnica(pieza) {
+    return pieza.id.startsWith("piezaInicio") || pieza.id.startsWith("piezaFin"); // Por el inicio de su id (también sirve para clones)
+}
 
+/*
+    repetirBajoPieza(pieza)
+    Propósito: decir sobre qué hueco de Repetir está la pieza, SIN decidir si puede entrar.
+    Devuelve: el Repetir, o null si no está sobre ninguno.
+*/
+function repetirBajoPieza(pieza) {
+    const repetires = workspace.querySelectorAll(":scope > .piezaRepetir"); // Solo Repetir sueltos en el workspace
     for (const repetirEl of repetires) {
-        if (repetirEl !== pieza && centroDentroDeCavidad(pieza, repetirEl)) return repetirEl;
+        if (repetirEl !== pieza && centroDentroDeCavidad(pieza, repetirEl)) return repetirEl; // Su centro cae en el hueco
     }
     return null;
+}
+
+/*
+    encontrarRepetirDestino(pieza)
+    Propósito: el Repetir donde la pieza SÍ puede entrar (lo usan el brillo, el imán y el anidado).
+    Devuelve: el Repetir, o null si no hay o si la pieza es Inicio/Fin.
+*/
+function encontrarRepetirDestino(pieza) {
+    if (esPiezaUnica(pieza)) return null; // Inicio y Fin nunca entran a un Repetir
+    return repetirBajoPieza(pieza);       // Las demás: donde caiga su centro
 }
 
 // Enciende el brillo solo en el Repetir donde entraría la pieza si se soltara ahora
@@ -425,6 +456,28 @@ function reacomodarPiezasDebajo(repetirEl, alturaAntes, deltaY) {
     cadena.forEach(p => {
         p.style.top = (p.offsetTop + deltaY) + "px";
     });
+}
+
+/*
+    mostrarGlobito(repetir, texto)
+    Propósito: mostrar un aviso corto sobre el Repetir durante 2 segundos.
+    Recibe: el Repetir de referencia y el texto.
+    Devuelve: nada.
+*/
+function mostrarGlobito(repetir, texto) {
+    const anterior = workspace.querySelector(".globitoAviso"); // ¿Quedó uno de un intento anterior?
+    if (anterior) anterior.remove();                           // Se quita para que no se apilen
+    clearTimeout(temporizadorGlobito);                         // Y se cancela su reloj
+
+    const globito = document.createElement("div");             // Nuevo elemento para el aviso
+    globito.className = "globitoAviso";                        // Su estilo vive en Estilos.css
+    globito.textContent = texto;                               // textContent (no innerHTML): es texto plano
+    workspace.appendChild(globito);                            // Se agrega al workspace para usar sus coordenadas
+
+    globito.style.left = repetir.offsetLeft + "px";                                          // Alineado con el Repetir
+    globito.style.top = Math.max(0, repetir.offsetTop - globito.offsetHeight - 12) + "px";  // Arriba de la barra superior (12 px para la flechita)
+
+    temporizadorGlobito = setTimeout(() => globito.remove(), 2000); // Se borra solo a los 2 s
 }
 
 function verificarEstado() {

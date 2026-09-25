@@ -860,3 +860,55 @@ button {
     /*Al poner el mouse encima pone el cursor en not-allowed*/
     /* Anula el "puño cerrado" de .pieza:active al hacer clic */
 }
+
+/*==============================================
+        AVISO: INICIO/FIN NO VAN DENTRO DE REPETIR
+===============================================*/
+
+.globitoAviso {
+    position: absolute;
+    /* Se coloca con left/top dentro del workspace */
+    z-index: 5;
+    /* Por encima de las piezas (las que se arrastran usan 2) */
+    max-width: 240px;
+    padding: 8px 12px;
+    background-color: #ffffff;
+    color: #2c1b3f;
+    /* Mismo morado oscuro del texto del menú */
+    border: 2px solid #9c27b0;
+    /* Morado del Repetir: se nota que el aviso es sobre él */
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 4px 4px 6px rgba(0, 0, 0, 0.3);
+    /* Misma sombra que las piezas */
+    pointer-events: none;
+    /* No estorba clics ni arrastres */
+    animation: aparecerGlobito 0.2s ease;
+}
+
+.globitoAviso::after {
+    content: "";
+    position: absolute;
+    left: 24px;
+    bottom: -8px;
+    /* Flechita que apunta hacia el Repetir */
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    border-right: 2px solid #9c27b0;
+    border-bottom: 2px solid #9c27b0;
+    transform: rotate(45deg);
+}
+
+@keyframes aparecerGlobito {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
